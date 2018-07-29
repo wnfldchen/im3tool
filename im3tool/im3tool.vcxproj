@@ -148,6 +148,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="BitmapFile.h" />
+    <ClInclude Include="BitmapPixelOperation.h" />
     <ClInclude Include="FileOpenDialog.h" />
     <ClInclude Include="im3tool.h" />
     <ClInclude Include="Painter.h" />
@@ -157,6 +158,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BitmapFile.cpp" />
+    <ClCompile Include="BitmapPixelOperation.cpp" />
     <ClCompile Include="FileOpenDialog.cpp" />
     <ClCompile Include="im3tool.cpp" />
     <ClCompile Include="Painter.cpp" />
