@@ -27,12 +27,30 @@
     <ClInclude Include="im3tool.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="BitmapFile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FileOpenDialog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Painter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="im3tool.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="BitmapFile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="FileOpenDialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Painter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
