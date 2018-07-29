@@ -1,7 +1,4 @@
 #pragma once
-// Forward declarations for class dependencies
-class BitmapPixelOperation;
-class BitmapImageOperation;
 // BitmapFile class declaration
 class BitmapFile {
 public:
@@ -63,6 +60,4 @@ public:
   INT32 getWidth(); // Get image width in pixels
   INT32 getHeight(); // Get image height in pixels
   void setPixel(UINT32 x, UINT32 y, Pixel pixel); // Set a pixel at location
-  void doPixelOperation(BitmapPixelOperation& operation); // Execute a per-pixel operation
-  void doImageOperation(BitmapImageOperation& operation); // Execute a whole-image operation
 };

@@ -1,7 +1,5 @@
 #include "stdafx.h"
 #include "BitmapFile.h"
-#include "BitmapPixelOperation.h"
-#include "BitmapImageOperation.h"
 
 BitmapFile::CreateResult BitmapFile::TestFile() {
   // Record any difference between expected and actual values
@@ -147,30 +145,6 @@ INT32 BitmapFile::getHeight() {
 void BitmapFile::setPixel(UINT32 x, UINT32 y, Pixel pixel) {
   // Set the pixel at the location
   File.Pixels[y * File.Header.Width + x] = pixel;
-}
-
-void BitmapFile::doPixelOperation(BitmapPixelOperation& operation) {
-  // Take in a pixel-based operation and apply it to every pixel
-  // Get image dimensions
-  INT32 width = getWidth();
-  INT32 height = getHeight();
-  // For each pixel in the image
-  for (INT32 y = 0; y < height; y++) {
-    for (INT32 x = 0; x < width; x++) {
-      Pixel pixel = getPixel(x, y);
-      // Apply the operation on the pixel
-      setPixel(x, y, operation.OnPixel(pixel, x, y));
-    }
-  }
-}
-
-void BitmapFile::doImageOperation(BitmapImageOperation& operation) {
-  // Take in a whole-image operation and apply it to the image
-  // Get image dimensions
-  INT32 width = getWidth();
-  INT32 height = getHeight();
-  // Apply the operation to the image
-  operation.OnImage(File.Pixels, width, height);
 }
 
 BitmapFile::File::File() : Pixels(NULL) {
