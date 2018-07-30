@@ -1,6 +1,6 @@
 #pragma once
-// Forward declarations for class dependencies
-class BitmapFile;
+#include "BitmapFile.h"
+
 // FileOpenDialog class declaration
 class FileOpenDialog {
 private:
