@@ -116,9 +116,29 @@ std::pair<Codec::CodedDC, Codec::CodedAC> Codec::runLengthDifferenceCoder(Codec:
 	return result;
 }
 
-std::array<std::pair<Codec::bitsDC, Codec::bitsAC>, 3> Codec::entropyCoder(Codec::CodedDC codedDC, Codec::CodedAC codedAC)
+std::array<std::pair<Codec::EntropiedDC, Codec::EntropiedAC>, 3>
+Codec::entropyCoder(Codec::CodedDC codedDC, Codec::CodedAC codedAC)
 {
-	// TODO: Implement
+	std::array<std::pair<EntropiedDC, EntropiedAC>, 3> output;
+	for (UINT8 i = 0; i < 3; i++) {
+		std::vector<INT8> dcComponents = codedDC[i];
+		std::vector<std::pair<UINT8, INT8>> runLengthACComponents = codedAC[i];
+		std::vector<UINT8> zeroesACComponents;
+		std::vector<INT8> valuesACComponents;
+		for (auto it = runLengthACComponents.begin();
+			it != runLengthACComponents.end();
+			it++) {
+			zeroesACComponents.push_back(it->first);
+			valuesACComponents.push_back(it->second);
+		}
+		EntropiedDC entropiedDC = huffmanEncode<INT8>(dcComponents);
+		EntropiedACFirst entropiedACFirst = huffmanEncode<UINT8>(zeroesACComponents);
+		EntropiedACSecond entropiedACSecond = huffmanEncode<INT8>(valuesACComponents);
+		EntropiedAC entropiedAC = EntropiedAC(entropiedACFirst, entropiedACSecond);
+		std::pair<EntropiedDC, EntropiedAC> entropiedPlane(entropiedDC, entropiedAC);
+		output[i] = entropiedPlane;
+	}
+	return output;
 }
 
 IM3File Codec::compress(BitmapFile * bitmapFile)
@@ -127,7 +147,7 @@ IM3File Codec::compress(BitmapFile * bitmapFile)
 	Codec::YUVPlanes<INT16> dctCoefficients = dct(yuv);
 	Codec::YUVPlanes<INT8> quantized = quantize(dctCoefficients);
 	std::pair<CodedDC, CodedAC> runLengthDifferenceCoded = runLengthDifferenceCoder(quantized);
-	std::array<std::pair<bitsDC, bitsAC>, 3> entropyCoded = entropyCoder(
+	std::array<std::pair<EntropiedDC, EntropiedAC>, 3> entropyCoded = entropyCoder(
 		runLengthDifferenceCoded.first, runLengthDifferenceCoded.second);
 	// TODO: Implement
 	return IM3File();
