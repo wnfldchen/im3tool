@@ -45,6 +45,9 @@
     <ClInclude Include="BitmapUtility.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="IM3File.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -69,6 +72,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="BitmapUtility.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="IM3File.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -152,6 +152,7 @@
     <ClInclude Include="BitmapUtility.h" />
     <ClInclude Include="Codec.h" />
     <ClInclude Include="FileOpenDialog.h" />
+    <ClInclude Include="IM3File.h" />
     <ClInclude Include="im3tool.h" />
     <ClInclude Include="Painter.h" />
     <ClInclude Include="Resource.h" />
@@ -164,6 +165,7 @@
     <ClCompile Include="BitmapUtility.cpp" />
     <ClCompile Include="Codec.cpp" />
     <ClCompile Include="FileOpenDialog.cpp" />
+    <ClCompile Include="IM3File.cpp" />
     <ClCompile Include="im3tool.cpp" />
     <ClCompile Include="Painter.cpp" />
     <ClCompile Include="stdafx.cpp">
