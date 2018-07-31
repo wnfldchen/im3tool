@@ -289,13 +289,13 @@ Codec::freqCount(std::vector<T> symbols)
 template<typename T>
 inline INT32 Codec::YUVPlanes<T>::getWidth()
 {
-	return planes[0][0].size() * 8;
+	return static_cast<INT32>(planes[0][0].size() * 8);
 }
 
 template<typename T>
 inline INT32 Codec::YUVPlanes<T>::getHeight()
 {
-	return planes[0].size() * 8;
+	return static_cast<INT32>(planes[0].size() * 8);
 }
 
 template<typename T>
