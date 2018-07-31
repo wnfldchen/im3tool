@@ -7,41 +7,20 @@
 #include <utility>
 #include <limits>
 #include <math.h>
-#include "IM3File.h"
+#include "BitmapUtility.h"
 #include "BitmapFile.h"
+
+// Forward declaration of class dependencies
+class IM3File;
 
 class Codec : public BitmapUtility
 {
 private:
 	// Quantization matrix
-	std::array<std::array<INT8, 8>, 8> Q = { {
-		{ 16, 11, 10, 16, 24, 40, 51, 61 },
-		{ 12, 12, 14, 19, 26, 58, 60, 55 },
-		{ 14, 13, 16, 24, 40, 57, 69, 56 },
-		{ 14, 17, 22, 29, 51, 87, 80, 62 },
-		{ 18, 22, 37, 56, 68, 109, 103, 77 },
-		{ 24, 35, 55, 64, 81, 104, 113, 92 },
-		{ 49, 64, 78, 87, 103, 121, 120, 101 },
-		{ 72, 92, 95, 98, 112, 100, 103, 99 }
-	} };
+	static const std::array<std::array<INT8, 8>, 8> Q;
 
 	// Zig-zag scan pattern
-	std::array<std::pair<INT8, INT8>, 63> Z = { {
-		{0,1},{1,0},
-		{2,0},{1,1},{0,2},
-		{0,3},{1,2},{2,1},{3,0},
-		{4,0},{3,1},{2,2},{1,3},{0,4},
-		{0,5},{1,4},{2,3},{3,2},{4,1},{5,0},
-		{6,0},{5,1},{4,2},{3,3},{2,4},{1,5},{0,6},
-		{0,7},{1,6},{2,5},{3,4},{4,3},{5,2},{6,1},{7,0},
-		{7,1},{6,2},{5,3},{4,4},{3,5},{2,6},{1,7},
-		{2,7},{3,6},{4,5},{5,4},{6,3},{7,2},
-		{7,3},{6,4},{5,5},{4,6},{3,7},
-		{4,7},{5,6},{6,5},{7,4},
-		{7,5},{6,6},{5,7},
-		{6,7},{7,6},
-		{7,7}
-	} };
+	static const std::array<std::pair<INT8, INT8>, 63> Z;
 
 	// Template types
 
@@ -67,23 +46,23 @@ private:
 	template <typename T>
 	struct YUVPlanes {
 		std::array<Plane<T>, 3> planes;
-		INT32 getWidth();
-		INT32 getHeight();
-		YUVPlanes(INT32 width, INT32 height);
+		INT32 getWidth() const;
+		INT32 getHeight() const;
+		YUVPlanes(const INT32 width, const INT32 height);
 	};
 
 	// Utility functions
 
 	// Function C in DCT
-	DOUBLE C(UINT8 x);
+	DOUBLE C(const UINT8 x);
 
 	// DCT on a 8-by-8 block
 	template <typename T, typename W>
-	Block<W> dctOnBlock(Block<T> block);
+	Block<W> dctOnBlock(const Block<T>& block);
 
 	// Quantization on a 8-by-8 block
 	template <typename T, typename W>
-	Block<W> quantizeOnBlock(Block<T> block);
+	Block<W> quantizeOnBlock(const Block<T>& block);
 
 	// Compression functions
 
@@ -91,15 +70,15 @@ private:
 	YUVPlanes<INT8> bitmapToYUV(BitmapFile* bitmapFile);
 
 	// Discrete Cosine Transform (DCT) on YUV planes
-	YUVPlanes<INT16> dct(YUVPlanes<INT8> yuv);
+	YUVPlanes<INT16> dct(const YUVPlanes<INT8>& yuv);
 
 	// Quantization on DCT'd YUV planes
-	YUVPlanes<INT8> quantize(YUVPlanes<INT16> dct);
+	YUVPlanes<INT8> quantize(const YUVPlanes<INT16>& dct);
 
 	// Difference code the DC components and run-length code the AC components
 	typedef std::array<std::vector<INT8>, 3> CodedDC;
 	typedef std::array<std::vector<std::pair<UINT8, INT8>>, 3> CodedAC;
-	std::pair<CodedDC, CodedAC> runLengthDifferenceCoder(Codec::YUVPlanes<INT8> quantized);
+	std::pair<CodedDC, CodedAC> runLengthDifferenceCoder(const Codec::YUVPlanes<INT8>& quantized);
 
 	// Huffman coding utility types and functions
 	struct SymbolWithCount {
@@ -110,19 +89,23 @@ private:
 		}
 	};
 
+public:
 	// Frequency table type
 	template <typename T>
 	using FrequencyTable = std::array<SymbolWithCount, std::numeric_limits<T>::max() - std::numeric_limits<T>::min() + 1>;
 
+private:
 	// Frequency count function
 	template <typename T>
-	FrequencyTable<T> freqCount(std::vector<T> Symbols);
+	FrequencyTable<T> freqCount(const std::vector<T>& symbols);
 
 	// Huffman coding of symbols
 	template <typename T>
-	std::pair<FrequencyTable<T>, std::vector<bool>> huffmanEncode(std::vector<T> input);
+	std::pair<FrequencyTable<T>, std::vector<bool>> huffmanEncode(const std::vector<T>& input);
 
 	// Entropy coding on run-length difference-encoded AC and DC components
+public:
+	// Types output by the entropy coder
 	typedef std::vector<bool> BitsDC;
 	typedef std::vector<bool> BitsACFirst;
 	typedef std::vector<bool> BitsACSecond;
@@ -130,7 +113,8 @@ private:
 	typedef std::pair<FrequencyTable<UINT8>, BitsACFirst> EntropiedACFirst;
 	typedef std::pair<FrequencyTable<INT8>, BitsACSecond> EntropiedACSecond;
 	typedef std::pair<EntropiedACFirst, EntropiedACSecond> EntropiedAC;
-	std::array<std::pair<EntropiedDC, EntropiedAC>, 3> entropyCoder(Codec::CodedDC codedDC, Codec::CodedAC codedAC);
+private:
+	std::array<std::pair<EntropiedDC, EntropiedAC>, 3> entropyCoder(const Codec::CodedDC& codedDC, const Codec::CodedAC& codedAC);
 
 	// Decompression functions
 
@@ -144,10 +128,11 @@ public:
 	IM3File compress(BitmapFile* bitmapFile);
 	// Decompress an IM3
 	BitmapFile* decompress(IM3File im3File);
+	Codec();
 };
 
 template<typename T>
-inline std::pair<Codec::FrequencyTable<T>, std::vector<bool>> Codec::huffmanEncode(std::vector<T> input)
+inline std::pair<Codec::FrequencyTable<T>, std::vector<bool>> Codec::huffmanEncode(const std::vector<T>& input)
 {
 	// Typedef for Symbol
 	typedef INT32 Symbol;
@@ -238,7 +223,7 @@ inline std::pair<Codec::FrequencyTable<T>, std::vector<bool>> Codec::huffmanEnco
 }
 
 template<typename T, typename W>
-inline Codec::Block<W> Codec::dctOnBlock(Block<T> block) {
+inline Codec::Block<W> Codec::dctOnBlock(const Block<T>& block) {
 	Block<W> output;
 	for (UINT8 v = 0; v < 8; v++) {
 		for (UINT8 u = 0; u < 8; u++) {
@@ -258,7 +243,7 @@ inline Codec::Block<W> Codec::dctOnBlock(Block<T> block) {
 }
 
 template<typename T, typename W>
-inline Codec::Block<W> Codec::quantizeOnBlock(Block<T> block)
+inline Codec::Block<W> Codec::quantizeOnBlock(const Block<T>& block)
 {
 	Block<W> output;
 	for (UINT8 i = 0; i < 8; i++) {
@@ -271,7 +256,7 @@ inline Codec::Block<W> Codec::quantizeOnBlock(Block<T> block)
 
 template<typename T>
 inline Codec::FrequencyTable<T>
-Codec::freqCount(std::vector<T> symbols)
+Codec::freqCount(const std::vector<T>& symbols)
 {
 	FrequencyTable<T> table;
 	T symbol = std::numeric_limits<T>::min();
@@ -287,23 +272,23 @@ Codec::freqCount(std::vector<T> symbols)
 }
 
 template<typename T>
-inline INT32 Codec::YUVPlanes<T>::getWidth()
+inline INT32 Codec::YUVPlanes<T>::getWidth() const
 {
 	return static_cast<INT32>(planes[0][0].size() * 8);
 }
 
 template<typename T>
-inline INT32 Codec::YUVPlanes<T>::getHeight()
+inline INT32 Codec::YUVPlanes<T>::getHeight() const
 {
 	return static_cast<INT32>(planes[0].size() * 8);
 }
 
 template<typename T>
-inline Codec::YUVPlanes<T>::YUVPlanes(INT32 width, INT32 height)
+inline Codec::YUVPlanes<T>::YUVPlanes(const INT32 width, const INT32 height)
 {
 	for (UINT8 i = 0; i < 3; i++) {
 		planes[i].resize(height / 8);
-		for (INT32 j = 0; j < height; j++) {
+		for (INT32 j = 0; j < height / 8; j++) {
 			planes[i][j].resize(width / 8);
 		}
 	}
