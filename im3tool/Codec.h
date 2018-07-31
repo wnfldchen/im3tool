@@ -54,7 +54,7 @@ private:
 	using Block = std::array<std::array<T, 8>, 8>;
 
 	template <typename T>
-	using Plane = std::vector<std::vector<Block>>;
+	using Plane = std::vector<std::vector<Block<T>>>;
 
 	// Keys for each plane
 	enum PlaneKeys {
@@ -66,7 +66,7 @@ private:
 	// Y, U, and V image planes consisting of 8-by-8 blocks
 	template <typename T>
 	struct YUVPlanes {
-		std::array<Plane, 3> planes;
+		std::array<Plane<T>, 3> planes;
 		INT32 getWidth();
 		INT32 getHeight();
 		YUVPlanes(INT32 width, INT32 height);
@@ -78,12 +78,12 @@ private:
 	DOUBLE C(UINT8 x);
 
 	// DCT on a 8-by-8 block
-	template <typename T, typename U>
-	Block<U> dctOnBlock(Block<T> block);
+	template <typename T, typename W>
+	Block<W> dctOnBlock(Block<T> block);
 
 	// Quantization on a 8-by-8 block
-	template <typename T, typename U>
-	Block<U> quantizeOnBlock(Block<T> block);
+	template <typename T, typename W>
+	Block<W> quantizeOnBlock(Block<T> block);
 
 	// Compression functions
 
@@ -237,9 +237,9 @@ inline std::pair<Codec::FrequencyTable<T>, std::vector<bool>> Codec::huffmanEnco
 	return std::pair<FrequencyTable<T>, std::vector<bool>>(freqTable, compressed);
 }
 
-template<typename T, typename U>
-inline Block<U> Codec::dctOnBlock(Block<T> block) {
-	Block<U> output;
+template<typename T, typename W>
+inline Codec::Block<W> Codec::dctOnBlock(Block<T> block) {
+	Block<W> output;
 	for (UINT8 v = 0; v < 8; v++) {
 		for (UINT8 u = 0; u < 8; u++) {
 			DOUBLE sum = 0.0;
@@ -250,17 +250,17 @@ inline Block<U> Codec::dctOnBlock(Block<T> block) {
 						* block[j][i];
 				}
 			}
-			U F = static_cast<U>(C(u) * C(v) * sum / 4);
+			W F = static_cast<W>(C(u) * C(v) * sum / 4);
 			output[v][u] = F;
 		}
 	}
 	return output;
 }
 
-template<typename T, typename U>
-inline Block<U> Codec::quantizeOnBlock(Block<T> block)
+template<typename T, typename W>
+inline Codec::Block<W> Codec::quantizeOnBlock(Block<T> block)
 {
-	Block<U> output;
+	Block<W> output;
 	for (UINT8 i = 0; i < 8; i++) {
 		for (UINT8 j = 0; j < 8; j++) {
 			output[i][j] = block[i][j] / Q[i][j];
