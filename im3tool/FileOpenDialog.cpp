@@ -1,6 +1,11 @@
 #include "stdafx.h"
+#include <string>
 #include "BitmapFile.h"
 #include "FileOpenDialog.h"
+
+// Forward declaration of class dependencies
+
+WCHAR FileOpenDialog::szFile[];
 
 void FileOpenDialog::InitOpenDialog(HWND hWnd) {
   // Configure the file opening dialog
@@ -64,11 +69,28 @@ BitmapFile * FileOpenDialog::OpenBitmapFile(HWND hWnd) {
   return bitmapFile;
 }
 
+HANDLE FileOpenDialog::OverwriteFileFromName(std::wstring fileNameToOpen)
+{
+	return CreateFile(
+		fileNameToOpen.c_str(),
+		GENERIC_WRITE,
+		0,
+		NULL,
+		CREATE_ALWAYS,
+		FILE_ATTRIBUTE_NORMAL,
+		NULL);
+}
+
 FileOpenDialog::FileOpenDialog(HWND hWnd, HANDLE* fileHandle) {
   // Configure the file open dialog
   InitOpenDialog(hWnd);
   // Show the dialog and set the result
   *fileHandle = Show();
+}
+
+std::wstring FileOpenDialog::getFileName()
+{
+	return std::wstring(szFile);
 }
 
 HANDLE FileOpenDialog::Show() {

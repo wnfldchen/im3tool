@@ -125,9 +125,9 @@ private:
 	// YUV to bitmap
 public:
 	// Compress a bitmap
-	IM3File compress(BitmapFile* bitmapFile);
+	IM3File* compress(BitmapFile* bitmapFile);
 	// Decompress an IM3
-	BitmapFile* decompress(IM3File im3File);
+	BitmapFile* decompress(IM3File* im3File);
 	Codec();
 };
 

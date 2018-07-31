@@ -172,7 +172,7 @@ Codec::entropyCoder(const Codec::CodedDC& codedDC, const Codec::CodedAC& codedAC
 	return output;
 }
 
-IM3File Codec::compress(BitmapFile * bitmapFile)
+IM3File* Codec::compress(BitmapFile * bitmapFile)
 {
 	Codec::YUVPlanes<INT8> yuv = bitmapToYUV(bitmapFile);
 	Codec::YUVPlanes<INT16> dctCoefficients = dct(yuv);
@@ -182,11 +182,11 @@ IM3File Codec::compress(BitmapFile * bitmapFile)
 		runLengthDifferenceCoded.first, runLengthDifferenceCoded.second);
 	UINT8 blocksWide = yuv.getWidth() / 8;
 	UINT8 blocksHigh = yuv.getHeight() / 8;
-	IM3File file(blocksWide, blocksHigh, entropyCoded);
+	IM3File* file = new IM3File(blocksWide, blocksHigh, entropyCoded);
 	return file;
 }
 
-BitmapFile * Codec::decompress(IM3File im3File)
+BitmapFile * Codec::decompress(IM3File* im3File)
 {
 	// TODO: Implement
 	return nullptr;
