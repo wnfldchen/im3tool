@@ -4,8 +4,8 @@
 
 void IM3File::Save(HANDLE fileHandle)
 {
+	static const DWORD fileHeaderWithTablesSize = sizeof(FileHeaderWithTables);
 	DWORD bytesWritten;
-	DWORD fileHeaderWithTablesSize = sizeof(FileHeaderWithTables);
 	WriteFile(
 		fileHandle,
 		&FileHeaderWithTables,
@@ -81,9 +81,9 @@ IM3File::IM3File(
 		Codec::EntropiedACFirst entropiedACFirst = entropyCoded[i].second.first;
 		Codec::EntropiedACSecond entropiedACSecond = entropyCoded[i].second.second;
 
-		Codec::FrequencyTable<INT8> dcDifferences = entropiedDC.first;
-		Codec::FrequencyTable<UINT8> acZeroes = entropiedACFirst.first;
-		Codec::FrequencyTable<INT8> acValues = entropiedACSecond.first;
+		Codec::LengthTable<INT8> dcDifferences = entropiedDC.first;
+		Codec::LengthTable<UINT8> acZeroes = entropiedACFirst.first;
+		Codec::LengthTable<INT8> acValues = entropiedACSecond.first;
 
 		PlaneHeader* dest = NULL;
 		Plane* plane = NULL;
@@ -105,9 +105,9 @@ IM3File::IM3File(
 
 		PlaneHeader temp;
 		for (UINT16 i = 0; i < 256; i++) {
-			temp.DCCounts[i] = dcDifferences[i].Count;
-			temp.ACZeroesCounts[i] = acZeroes[i].Count;
-			temp.ACValuesCounts[i] = acValues[i].Count;
+			temp.DCCounts[i] = dcDifferences[i];
+			temp.ACZeroesCounts[i] = acZeroes[i];
+			temp.ACValuesCounts[i] = acValues[i];
 		}
 		std::memcpy(dest, &temp, sizeof(PlaneHeader));
 

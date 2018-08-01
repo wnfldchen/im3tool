@@ -17,9 +17,9 @@ private:
 	};
 	// Plane Header
 	struct PlaneHeader {
-		UINT32 DCCounts[256]; // Difference-Coded DC Huffman Table
-		UINT32 ACZeroesCounts[256]; // Run-Length Zeroes AC Huffman Table
-		UINT32 ACValuesCounts[256]; // Run-Length Values AC Huffman Table
+		UINT8 DCCounts[256]; // Difference-Coded DC Canonical Huffman Table
+		UINT8 ACZeroesCounts[256]; // Run-Length Zeroes AC Canonical Huffman Table
+		UINT8 ACValuesCounts[256]; // Run-Length Values AC Canonical Huffman Table
 	};
 	// File Header With Tables
 	struct FileHeaderWithTables {

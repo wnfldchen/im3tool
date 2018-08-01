@@ -1,5 +1,6 @@
 #pragma once
 #define _USE_MATH_DEFINES
+#include <algorithm>
 #include <array>
 #include <vector>
 #include <queue>
@@ -89,10 +90,14 @@ private:
 		}
 	};
 
-public:
 	// Frequency table type
 	template <typename T>
 	using FrequencyTable = std::array<SymbolWithCount, std::numeric_limits<T>::max() - std::numeric_limits<T>::min() + 1>;
+
+public:
+	// Length table type
+	template <typename T>
+	using LengthTable = std::array<UINT8, std::numeric_limits<T>::max() - std::numeric_limits<T>::min() + 1>;
 
 private:
 	// Frequency count function
@@ -101,7 +106,7 @@ private:
 
 	// Huffman coding of symbols
 	template <typename T>
-	std::pair<FrequencyTable<T>, std::vector<bool>> huffmanEncode(const std::vector<T>& input);
+	std::pair<LengthTable<T>, std::vector<bool>> huffmanEncode(const std::vector<T>& input);
 
 	// Entropy coding on run-length difference-encoded AC and DC components
 public:
@@ -109,9 +114,9 @@ public:
 	typedef std::vector<bool> BitsDC;
 	typedef std::vector<bool> BitsACFirst;
 	typedef std::vector<bool> BitsACSecond;
-	typedef std::pair<FrequencyTable<INT8>, BitsDC> EntropiedDC;
-	typedef std::pair<FrequencyTable<UINT8>, BitsACFirst> EntropiedACFirst;
-	typedef std::pair<FrequencyTable<INT8>, BitsACSecond> EntropiedACSecond;
+	typedef std::pair<LengthTable<INT8>, BitsDC> EntropiedDC;
+	typedef std::pair<LengthTable<UINT8>, BitsACFirst> EntropiedACFirst;
+	typedef std::pair<LengthTable<INT8>, BitsACSecond> EntropiedACSecond;
 	typedef std::pair<EntropiedACFirst, EntropiedACSecond> EntropiedAC;
 private:
 	std::array<std::pair<EntropiedDC, EntropiedAC>, 3> entropyCoder(const Codec::CodedDC& codedDC, const Codec::CodedAC& codedAC);
@@ -132,7 +137,7 @@ public:
 };
 
 template<typename T>
-inline std::pair<Codec::FrequencyTable<T>, std::vector<bool>> Codec::huffmanEncode(const std::vector<T>& input)
+inline std::pair<Codec::LengthTable<T>, std::vector<bool>> Codec::huffmanEncode(const std::vector<T>& input)
 {
 	// Typedef for Symbol
 	typedef INT32 Symbol;
@@ -188,29 +193,73 @@ inline std::pair<Codec::FrequencyTable<T>, std::vector<bool>> Codec::huffmanEnco
 	}
 	// The root node is the last parent
 	Symbol root = parentSymbol - PARENT_STEP;
-	// Set up the code table
+	// Set up the table for storing sorted code lengths
 	std::array<
-		std::vector<bool>,
-		std::numeric_limits<T>::max() - std::numeric_limits<T>::min() + 1> codes;
+		std::pair<UINT8, T>,
+		std::numeric_limits<T>::max() - std::numeric_limits<T>::min() + 1> sortedLengths;
+	// Additionally generate a symbol bit length table
+	LengthTable<T> lengths;
+	// Store the code lengths
 	for (Symbol i = std::numeric_limits<T>::min();
 		i <= std::numeric_limits<T>::max();
 		i++) {
 		auto it = tree.find(i);
 		Symbol symbol = it->first;
 		Node node = tree[symbol];
+		UINT8 length = 0;
 		while (symbol != root) {
-			INT32 index = i - std::numeric_limits<T>::min();
 			Symbol nextSymbol = node.Parent;
 			Node nextNode = tree[nextSymbol];
-			if (symbol == nextNode.Left) {
-				codes[index].insert(codes[index].begin(), false);
-			}
-			else {
-				codes[index].insert(codes[index].begin(), true);
-			}
+			length += 1;
 			symbol = nextSymbol;
 			node = nextNode;
 		}
+		INT32 index = i - std::numeric_limits<T>::min();
+		lengths[index] = length;
+		sortedLengths[index] = { length, static_cast<T>(i) };
+	}
+	// Sort the code lengths
+	std::sort(sortedLengths.begin(), sortedLengths.end());
+	// Set up the canonical code table
+	std::array<
+		std::pair<std::vector<bool>, T>,
+		std::numeric_limits<T>::max() - std::numeric_limits<T>::min() + 1> canonicalCodes;
+	// Assign canonical codes
+	canonicalCodes[0] = { std::vector<bool>(sortedLengths[0].first, false), sortedLengths[0].second };
+	for (INT32 i = 1; i < canonicalCodes.size(); i++) {
+		// Increment from the previous code for the next code
+		std::vector<bool> code = canonicalCodes[i - 1].first;
+		UINT8 bitIndex;
+		for (bitIndex = static_cast<UINT8>(code.size() - 1); bitIndex >= 0; bitIndex--) {
+			if (code[bitIndex]) {
+				code[bitIndex] = false;
+			} else {
+				break;
+			}
+		}
+		code[bitIndex] = true;
+		// If the code length increases, append zeroes
+		UINT8 length = sortedLengths[i].first;
+		while (code.size() != length) {
+			code.push_back(false);
+		}
+		canonicalCodes[i] = { code, sortedLengths[i].second };
+	}
+	// Build an easier to traverse code table
+	std::array<
+		std::vector<bool>,
+		std::numeric_limits<T>::max() - std::numeric_limits<T>::min() + 1> codes;
+	for (Symbol i = std::numeric_limits<T>::min();
+		i <= std::numeric_limits<T>::max();
+		i++) {
+		INT32 index = i - std::numeric_limits<T>::min();
+		auto result = std::find_if(
+			canonicalCodes.begin(),
+			canonicalCodes.end(),
+			[i](const std::pair<std::vector<bool>, T>& entry) {
+				return entry.second == static_cast<T>(i);
+			});
+		codes[index] = result->first;
 	}
 	// Compress the data
 	std::vector<bool> compressed;
@@ -219,7 +268,7 @@ inline std::pair<Codec::FrequencyTable<T>, std::vector<bool>> Codec::huffmanEnco
 		std::vector<bool> code = codes[index];
 		compressed.insert(compressed.end(), code.begin(), code.end());
 	}
-	return std::pair<FrequencyTable<T>, std::vector<bool>>(freqTable, compressed);
+	return std::pair<LengthTable<T>, std::vector<bool>>(lengths, compressed);
 }
 
 template<typename T, typename W>
