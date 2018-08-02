@@ -1,34 +1,15 @@
 #pragma once
 #include <vector>
+#include "commontypes.h"
 #include "Codec.h"
+
+// Forward declaration of class dependencies
+class Codec;
 
 class IM3File
 {
 private:
-	// File structure types
-	// Structure packing set to 1-byte to have continuous reading
-#pragma pack(push, 1)
-	// File Header
-	struct FileHeader {
-		UINT8 MagicByteI = 73; // 'I' == 73
-		UINT8 MagicByteM = 77; // 'M' == 77
-		UINT8 BlocksWide; // Width of image in blocks
-		UINT8 BlocksHigh; // Height of image in blocks
-	};
-	// Plane Header
-	struct PlaneHeader {
-		UINT8 DCCounts[256]; // Difference-Coded DC Canonical Huffman Table
-		UINT8 ACZeroesCounts[256]; // Run-Length Zeroes AC Canonical Huffman Table
-		UINT8 ACValuesCounts[256]; // Run-Length Values AC Canonical Huffman Table
-	};
-	// File Header With Tables
-	struct FileHeaderWithTables {
-		FileHeader FileHeader;
-		PlaneHeader YPlaneHeader;
-		PlaneHeader UPlaneHeader;
-		PlaneHeader VPlaneHeader;
-	} FileHeaderWithTables;
-#pragma pack(pop)
+	FileHeaderWithTables fileHeaderWithTables;
 	struct Plane {
 		std::vector<bool> DC;
 		std::vector<bool> AC0;
@@ -39,14 +20,17 @@ private:
 		Plane U;
 		Plane V;
 	} Planes;
+	std::vector<bool> bitsReadFromFile;
 public:
 	void Save(HANDLE fileHandle);
+	FileHeaderWithTables getFileHeaderWithTables();
+	std::vector<bool> getBitsReadFromFile();
 	IM3File(HANDLE fileHandle);
 	IM3File(
 		UINT8 blocksWide,
 		UINT8 blocksHigh,
 		std::array<
-		std::pair<Codec::EntropiedDC, Codec::EntropiedAC>, 3
+		std::pair<EntropiedDC, EntropiedAC>, 3
 		> entropyCoded);
 	~IM3File();
 };

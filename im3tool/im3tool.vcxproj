@@ -151,6 +151,7 @@
     <ClInclude Include="BitmapPixelOperation.h" />
     <ClInclude Include="BitmapUtility.h" />
     <ClInclude Include="Codec.h" />
+    <ClInclude Include="commontypes.h" />
     <ClInclude Include="FileOpenDialog.h" />
     <ClInclude Include="IM3File.h" />
     <ClInclude Include="im3tool.h" />

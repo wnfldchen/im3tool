@@ -57,6 +57,7 @@ private:
 public:
   // Public functions used by other classes and window code
   BitmapFile(HANDLE fileHandle, CreateResult* result); // Constructor from file
+  BitmapFile(INT32 width, INT32 height);
   BitmapFile(const BitmapFile& bitmapFile); // Deep copy constructor from other instance
   Pixel getPixel(UINT32 x, UINT32 y); // Get a pixel from the location
   INT32 getWidth(); // Get image width in pixels

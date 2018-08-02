@@ -2,6 +2,7 @@
 #include <string>
 #include "BitmapFile.h"
 #include "FileOpenDialog.h"
+#include "Codec.h"
 
 // Forward declaration of class dependencies
 
@@ -20,7 +21,7 @@ void FileOpenDialog::InitOpenDialog(HWND hWnd) {
   // Recommended max filename size is 260 characters
   ofn.nMaxFile = szFileN;
   // Filter only bitmap files
-  ofn.lpstrFilter = L"BMP files\0*.BMP\0\0";
+  ofn.lpstrFilter = L"BMP files\0*.BMP\0IM3 files\0*.IM3\0\0";
   ofn.nFilterIndex = 0;
   ofn.lpstrFileTitle = NULL;
   ofn.nMaxFileTitle = 0;
@@ -30,6 +31,7 @@ void FileOpenDialog::InitOpenDialog(HWND hWnd) {
 }
 
 BitmapFile * FileOpenDialog::OpenBitmapFile(HWND hWnd) {
+  static Codec codec;
   BitmapFile* bitmapFile = NULL;
   BitmapFile::CreateResult result;
   HANDLE fileHandle;
@@ -37,34 +39,45 @@ BitmapFile * FileOpenDialog::OpenBitmapFile(HWND hWnd) {
   FileOpenDialog fileOpenDialog(hWnd, &fileHandle);
   // If a file was opened
   if (fileHandle) {
-    // Read the file into memory
-    bitmapFile = new BitmapFile(fileHandle, &result);
-    // If there was an error while reading the file show a message
-    switch (result) {
-    case BitmapFile::ERROR_NOT_BMP:
-      MessageBox(hWnd, L"Not a valid BMP file", NULL, MB_OK);
-      break;
-    case BitmapFile::ERROR_NOT_UNCOMPRESSED:
-      MessageBox(hWnd, L"Not uncompressed", NULL, MB_OK);
-      break;
-    case BitmapFile::ERROR_NOT_24BIT:
-      MessageBox(hWnd, L"Not a 24-bit image", NULL, MB_OK);
-      break;
-    case BitmapFile::ERROR_READ_FAILED:
-      MessageBox(hWnd, L"Read failed", NULL, MB_OK);
-      break;
-    }
-    // If there was an error while reading the file
-    switch (result) {
-    case BitmapFile::ERROR_NOT_BMP:
-    case BitmapFile::ERROR_NOT_UNCOMPRESSED:
-    case BitmapFile::ERROR_NOT_24BIT:
-    case BitmapFile::ERROR_READ_FAILED:
-      // Deallocate the memory and set the pointer to null
-      delete bitmapFile;
-      bitmapFile = NULL;
-      break;
-    }
+	// Check if it was an IM3 file
+	std::wstring fileName = getFileName();
+	// If it is an IM3 file, decompress it
+	// Else it is a BMP file, read it in
+	if (fileName.find(L".im3") != std::wstring::npos ||
+		fileName.find(L".IM3") != std::wstring::npos) {
+		IM3File im3File(fileHandle);
+		bitmapFile = codec.decompress(&im3File);
+	}
+	else {
+		// Read the file into memory
+		bitmapFile = new BitmapFile(fileHandle, &result);
+		// If there was an error while reading the file show a message
+		switch (result) {
+		case BitmapFile::ERROR_NOT_BMP:
+			MessageBox(hWnd, L"Not a valid BMP file", NULL, MB_OK);
+			break;
+		case BitmapFile::ERROR_NOT_UNCOMPRESSED:
+			MessageBox(hWnd, L"Not uncompressed", NULL, MB_OK);
+			break;
+		case BitmapFile::ERROR_NOT_24BIT:
+			MessageBox(hWnd, L"Not a 24-bit image", NULL, MB_OK);
+			break;
+		case BitmapFile::ERROR_READ_FAILED:
+			MessageBox(hWnd, L"Read failed", NULL, MB_OK);
+			break;
+		}
+		// If there was an error while reading the file
+		switch (result) {
+		case BitmapFile::ERROR_NOT_BMP:
+		case BitmapFile::ERROR_NOT_UNCOMPRESSED:
+		case BitmapFile::ERROR_NOT_24BIT:
+		case BitmapFile::ERROR_READ_FAILED:
+			// Deallocate the memory and set the pointer to null
+			delete bitmapFile;
+			bitmapFile = NULL;
+			break;
+		}
+	}
   }
   return bitmapFile;
 }

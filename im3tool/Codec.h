@@ -10,6 +10,8 @@
 #include <math.h>
 #include "BitmapUtility.h"
 #include "BitmapFile.h"
+#include "commontypes.h"
+#include "IM3File.h"
 
 // Forward declaration of class dependencies
 class IM3File;
@@ -61,9 +63,17 @@ private:
 	template <typename T, typename W>
 	Block<W> dctOnBlock(const Block<T>& block);
 
+	// Inverse DCT on a 8-by-8 block
+	template <typename T, typename W>
+	Block<W> inverseDCTOnBlock(const Block<T>& block);
+
 	// Quantization on a 8-by-8 block
 	template <typename T, typename W>
 	Block<W> quantizeOnBlock(const Block<T>& block);
+
+	// Dequantization on a 8-by-8 block
+	template <typename T, typename W>
+	Block<W> dequantizeOnBlock(const Block<T>& block);
 
 	// Compression functions
 
@@ -77,8 +87,6 @@ private:
 	YUVPlanes<INT8> quantize(const YUVPlanes<INT16>& dct);
 
 	// Difference code the DC components and run-length code the AC components
-	typedef std::array<std::vector<INT8>, 3> CodedDC;
-	typedef std::array<std::vector<std::pair<UINT8, INT8>>, 3> CodedAC;
 	std::pair<CodedDC, CodedAC> runLengthDifferenceCoder(const Codec::YUVPlanes<INT8>& quantized);
 
 	// Huffman coding utility types and functions
@@ -94,12 +102,6 @@ private:
 	template <typename T>
 	using FrequencyTable = std::array<SymbolWithCount, std::numeric_limits<T>::max() - std::numeric_limits<T>::min() + 1>;
 
-public:
-	// Length table type
-	template <typename T>
-	using LengthTable = std::array<UINT8, std::numeric_limits<T>::max() - std::numeric_limits<T>::min() + 1>;
-
-private:
 	// Frequency count function
 	template <typename T>
 	FrequencyTable<T> freqCount(const std::vector<T>& symbols);
@@ -108,26 +110,40 @@ private:
 	template <typename T>
 	std::pair<LengthTable<T>, std::vector<bool>> huffmanEncode(const std::vector<T>& input);
 
+	// Huffman decoding of symbols
+	template <typename T>
+	std::vector<T> huffmanDecode(
+		const LengthTable<T>& lengthTable,
+		std::vector<bool>& input,
+		size_t numToDecode = std::numeric_limits<size_t>::max());
+
 	// Entropy coding on run-length difference-encoded AC and DC components
-public:
-	// Types output by the entropy coder
-	typedef std::vector<bool> BitsDC;
-	typedef std::vector<bool> BitsACFirst;
-	typedef std::vector<bool> BitsACSecond;
-	typedef std::pair<LengthTable<INT8>, BitsDC> EntropiedDC;
-	typedef std::pair<LengthTable<UINT8>, BitsACFirst> EntropiedACFirst;
-	typedef std::pair<LengthTable<INT8>, BitsACSecond> EntropiedACSecond;
-	typedef std::pair<EntropiedACFirst, EntropiedACSecond> EntropiedAC;
-private:
-	std::array<std::pair<EntropiedDC, EntropiedAC>, 3> entropyCoder(const Codec::CodedDC& codedDC, const Codec::CodedAC& codedAC);
+	std::array<std::pair<EntropiedDC, EntropiedAC>, 3> entropyCoder(
+		const CodedDC& codedDC,
+		const CodedAC& codedAC);
 
 	// Decompression functions
 
-	// TODO: Implement
 	// Entropy decoding
+	std::pair<CodedDC, CodedAC> entropyDecoder(
+		const FileHeaderWithTables& fileHeaderWithTables,
+		std::vector<bool>& bitsReadFromFile);
+
+	// Run-length and difference decoding
+	YUVPlanes<INT8> runLengthDifferenceDecoder(
+		const FileHeaderWithTables & fileHeaderWithTables,
+		const std::pair<CodedDC, CodedAC> & runLengthDifferenceCoded);
+
 	// Dequantization
+	YUVPlanes<INT16> dequantize(const YUVPlanes<INT8>& quantized);
+
 	// Inverse DCT
+	YUVPlanes<INT8> inverseDCT(const YUVPlanes<INT16>& dct);
+
 	// YUV to bitmap
+	//YUVPlanes<INT8> bitmapToYUV(BitmapFile* bitmapFile)
+	BitmapFile* YUVToBitmap(const YUVPlanes<INT8>& yuv);
+
 public:
 	// Compress a bitmap
 	IM3File* compress(BitmapFile* bitmapFile);
@@ -137,7 +153,7 @@ public:
 };
 
 template<typename T>
-inline std::pair<Codec::LengthTable<T>, std::vector<bool>> Codec::huffmanEncode(const std::vector<T>& input)
+inline std::pair<LengthTable<T>, std::vector<bool>> Codec::huffmanEncode(const std::vector<T>& input)
 {
 	// Typedef for Symbol
 	typedef INT32 Symbol;
@@ -271,6 +287,81 @@ inline std::pair<Codec::LengthTable<T>, std::vector<bool>> Codec::huffmanEncode(
 	return std::pair<LengthTable<T>, std::vector<bool>>(lengths, compressed);
 }
 
+template<typename T>
+inline std::vector<T> Codec::huffmanDecode(
+	const LengthTable<T>& lengthTable,
+	std::vector<bool>& input,
+	size_t numToDecode)
+{
+	// Typedef for Symbol
+	typedef INT32 Symbol;
+	// Set up the table for storing sorted code lengths
+	std::array<
+		std::pair<UINT8, T>,
+		std::numeric_limits<T>::max() - std::numeric_limits<T>::min() + 1> sortedLengths;
+	// Generate the sorted symbol bit length table
+	for (Symbol i = std::numeric_limits<T>::min();
+		i <= std::numeric_limits<T>::max();
+		i++) {
+		INT32 index = i - std::numeric_limits<T>::min();
+		sortedLengths[index] = { lengthTable[index], static_cast<T>(i) };
+	}
+	// Sort the code lengths
+	std::sort(sortedLengths.begin(), sortedLengths.end());
+	// Set up the canonical code table
+	std::array<
+		std::pair<std::vector<bool>, T>,
+		std::numeric_limits<T>::max() - std::numeric_limits<T>::min() + 1> canonicalCodes;
+	// Assign canonical codes
+	canonicalCodes[0] = { std::vector<bool>(sortedLengths[0].first, false), sortedLengths[0].second };
+	for (INT32 i = 1; i < canonicalCodes.size(); i++) {
+		// Increment from the previous code for the next code
+		std::vector<bool> code = canonicalCodes[i - 1].first;
+		UINT8 bitIndex;
+		for (bitIndex = static_cast<UINT8>(code.size() - 1); bitIndex >= 0; bitIndex--) {
+			if (code[bitIndex]) {
+				code[bitIndex] = false;
+			}
+			else {
+				break;
+			}
+		}
+		code[bitIndex] = true;
+		// If the code length increases, append zeroes
+		UINT8 length = sortedLengths[i].first;
+		while (code.size() != length) {
+			code.push_back(false);
+		}
+		canonicalCodes[i] = { code, sortedLengths[i].second };
+	}
+	// Decompress the data
+	size_t bitsRead = 0;
+	std::vector<bool> buffer;
+	std::vector<T> decompressed;
+	for (auto it = input.begin(); it != input.end(); it++) {
+		buffer.push_back(*it);
+		bitsRead += 1;
+		auto result = std::find_if(
+			canonicalCodes.begin(),
+			canonicalCodes.end(),
+			[buffer](const std::pair<std::vector<bool>, T>& entry) {
+				return entry.first == buffer;
+			});
+		if (result != canonicalCodes.end()) {
+			decompressed.push_back(result->second);
+			buffer.clear();
+			if (decompressed.size() == numToDecode) {
+				break;
+			}
+		}
+	}
+	// Consume the bits read up to the next byte boundary
+	size_t remainder = bitsRead % 8;
+	bitsRead = remainder == 0 ? bitsRead : bitsRead + 8 - remainder;
+	input.erase(input.begin(), input.begin() + bitsRead);
+	return decompressed;
+}
+
 template<typename T, typename W>
 inline Codec::Block<W> Codec::dctOnBlock(const Block<T>& block) {
 	Block<W> output;
@@ -284,8 +375,31 @@ inline Codec::Block<W> Codec::dctOnBlock(const Block<T>& block) {
 						* block[j][i];
 				}
 			}
-			W F = static_cast<W>(C(u) * C(v) * sum / 4);
+			DOUBLE val = C(u) * C(v) * sum / 4.0;
+			W F = static_cast<W>(round(val));
 			output[v][u] = F;
+		}
+	}
+	return output;
+}
+
+template<typename T, typename W>
+inline Codec::Block<W> Codec::inverseDCTOnBlock(const Block<T>& block)
+{
+	Block<W> output;
+	for (UINT8 j = 0; j < 8; j++) {
+		for (UINT8 i = 0; i < 8; i++) {
+			DOUBLE sum = 0.0;
+			for (UINT8 v = 0; v < 8; v++) {
+				for (UINT8 u = 0; u < 8; u++) {
+					sum += C(u) * C(v) / 4.0
+						* cos((2 * i + 1) * u * M_PI / 16)
+						* cos((2 * j + 1) * v * M_PI / 16)
+						* block[v][u];
+				}
+			}
+			W f = static_cast<W>(round(ClampToRange<double>(sum, -128.0, 127.0)));
+			output[j][i] = f;
 		}
 	}
 	return output;
@@ -297,7 +411,21 @@ inline Codec::Block<W> Codec::quantizeOnBlock(const Block<T>& block)
 	Block<W> output;
 	for (UINT8 i = 0; i < 8; i++) {
 		for (UINT8 j = 0; j < 8; j++) {
-			output[i][j] = block[i][j] / Q[i][j];
+			DOUBLE val = static_cast<DOUBLE>(block[i][j]) /
+				static_cast<DOUBLE>(Q[i][j]);
+			output[i][j] = static_cast<W>(round(val));
+		}
+	}
+	return output;
+}
+
+template<typename T, typename W>
+inline Codec::Block<W> Codec::dequantizeOnBlock(const Block<T>& block)
+{
+	Block<W> output;
+	for (UINT8 i = 0; i < 8; i++) {
+		for (UINT8 j = 0; j < 8; j++) {
+			output[i][j] = static_cast<W>(block[i][j]) * Q[i][j];
 		}
 	}
 	return output;

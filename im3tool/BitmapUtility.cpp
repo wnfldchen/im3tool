@@ -33,19 +33,22 @@ BitmapFile::Pixel BitmapUtility::NormalizedRGBtoPixel(NormalizedRGB rgb) {
 BitmapUtility::NormalizedRGB BitmapUtility::YUVtoNormalizedRGB(YUV yuv) {
 	// [RGB vector] = [Conversion Matrix]*[YUV vector]
 	DOUBLE		Y = yuv.Y, U = yuv.U, V = yuv.V;
-	DOUBLE R = 1.000*Y + 0.000*U + 1.000*V;
-	DOUBLE G = 1.000*Y - 0.194*U - 0.509*V;
-	DOUBLE B = 1.000*Y + 1.000*U + 0.000*V;
-	NormalizedRGB rgb = { R, G, B };
+	DOUBLE R = Y + 1.402 * (V - 0.5);
+	DOUBLE G = Y - 0.344136 * (U - 0.5) - 0.714136 * (V - 0.5);
+	DOUBLE B = Y + 1.772 * (U - 0.5);
+	NormalizedRGB rgb = {
+		ClampToRange<DOUBLE>(R, 0.0, 1.0),
+		ClampToRange<DOUBLE>(G, 0.0, 1.0),
+		ClampToRange<DOUBLE>(B, 0.0, 1.0) };
 	return rgb;
 }
 
 BitmapUtility::YUV BitmapUtility::NormalizedRGBtoYUV(NormalizedRGB rgb) {
 	// [YUV vector] = [Conversion Matrix]*[RGB vector]
 	DOUBLE		R = rgb.R, G = rgb.G, B = rgb.B;
-	DOUBLE Y = 0.299*R + 0.587*G + 0.114*B;
-	DOUBLE U = -0.299*R - 0.587*G + 0.886*B;
-	DOUBLE V = 0.701*R - 0.587*G - 0.114*B;
+	DOUBLE Y = 0 + (0.299*R) + (0.587*G) + (0.114*B);
+	DOUBLE U = 0.5 - (0.168736*R) - (0.331264*G) + (0.5*B);
+	DOUBLE V = 0.5 + (0.5*R) - (0.418688*G) - (0.081312*B);
 	YUV yuv = { Y, U, V };
 	return yuv;
 }

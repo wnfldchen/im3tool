@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include <cmath>
+#include <limits>
 #include "BitmapUtility.h"
+#include "commontypes.h"
 #include "Codec.h"
 #include "IM3File.h"
 
@@ -35,7 +37,7 @@ const std::array<std::pair<INT8, INT8>, 63> Codec::Z{ {
 	} };
 
 DOUBLE Codec::C(const UINT8 x) {
-	static const DOUBLE a = M_SQRT2 / 2.0;
+	static const DOUBLE a = M_SQRT1_2;
 	return x == 0 ? a : 1.0;
 }
 
@@ -86,7 +88,7 @@ Codec::YUVPlanes<INT8> Codec::quantize(const YUVPlanes<INT16>& dct)
 	INT32 height = dct.getHeight();
 	YUVPlanes<INT8> output(width, height);
 	for (INT32 i = 0; i < height; i += 8) {
-		for (INT32 j = 0; j < height; j += 8) {
+		for (INT32 j = 0; j < width; j += 8) {
 			INT32 blockY = i / 8;
 			INT32 blockX = j / 8;
 			output.planes[Y][blockY][blockX] = quantizeOnBlock<INT16, INT8>(dct.planes[Y][blockY][blockX]);
@@ -97,13 +99,10 @@ Codec::YUVPlanes<INT8> Codec::quantize(const YUVPlanes<INT16>& dct)
 	return output;
 }
 
-std::pair<Codec::CodedDC, Codec::CodedAC> Codec::runLengthDifferenceCoder(const Codec::YUVPlanes<INT8>& quantized)
+std::pair<CodedDC, CodedAC> Codec::runLengthDifferenceCoder(const Codec::YUVPlanes<INT8>& quantized)
 {
 	// Difference coding DC components
 	std::array<std::vector<INT8>, 3> dcDifferences;
-	for (UINT8 i = 0; i < 3; i++) {
-		dcDifferences[i].push_back(0);
-	}
 	// Run-length coding AC components
 	std::array<std::vector<std::pair<UINT8, INT8>>, 3> runLengthCodes;
 	// Get plane dimensions
@@ -112,13 +111,15 @@ std::pair<Codec::CodedDC, Codec::CodedAC> Codec::runLengthDifferenceCoder(const 
 	// For each channel
 	for (UINT8 channel = 0; channel < 3; channel++) {
 		// For each block
+		INT8 lastDCValue = 0;
 		for (INT32 i = 0; i < height; i += 8) {
 			for (INT32 j = 0; j < width; j += 8) {
 				INT32 blockY = i / 8;
 				INT32 blockX = j / 8;
 				Block<INT8> block = quantized.planes[channel][blockY][blockX];
 				// Encode the DC difference from last block
-				dcDifferences[channel].push_back(block[0][0] - dcDifferences[channel].back());
+				dcDifferences[channel].push_back(block[0][0] - lastDCValue);
+				lastDCValue = block[0][0];
 				// Encode the run-length codes from zig-zag traversal
 				UINT8 numZeroes = 0;
 				for (auto it = Z.begin(); it != Z.end(); it++) {
@@ -135,20 +136,16 @@ std::pair<Codec::CodedDC, Codec::CodedAC> Codec::runLengthDifferenceCoder(const 
 					}
 				}
 				// Encode the end-of-block code
-				runLengthCodes[channel].push_back(std::pair<UINT8, UINT8>{ 0, 0 });
+				runLengthCodes[channel].push_back(std::pair<UINT8, INT8>{ 0, 0 });
 			}
 		}
-	}
-	// Remove the leading zero in the DC difference codings
-	for (UINT8 i = 0; i < 3; i++) {
-		dcDifferences[i].erase(dcDifferences[i].begin());
 	}
 	std::pair<CodedDC, CodedAC> result(dcDifferences, runLengthCodes);
 	return result;
 }
 
-std::array<std::pair<Codec::EntropiedDC, Codec::EntropiedAC>, 3>
-Codec::entropyCoder(const Codec::CodedDC& codedDC, const Codec::CodedAC& codedAC)
+std::array<std::pair<EntropiedDC, EntropiedAC>, 3>
+Codec::entropyCoder(const CodedDC& codedDC, const CodedAC& codedAC)
 {
 	std::array<std::pair<EntropiedDC, EntropiedAC>, 3> output;
 	for (UINT8 i = 0; i < 3; i++) {
@@ -172,12 +169,214 @@ Codec::entropyCoder(const Codec::CodedDC& codedDC, const Codec::CodedAC& codedAC
 	return output;
 }
 
+std::pair<CodedDC, CodedAC> Codec::entropyDecoder(const FileHeaderWithTables & fileHeaderWithTables, std::vector<bool>& bitsReadFromFile)
+{
+	UINT8 blocksWide = fileHeaderWithTables.FileHeader.BlocksWide;
+	UINT8 blocksHigh = fileHeaderWithTables.FileHeader.BlocksHigh;
+	INT32 numBlocks = blocksWide * blocksHigh;
+	CodedDC codedDC;
+	CodedAC codedAC;
+	for (UINT8 i = 0; i < 3; i++) {
+		const PlaneHeader* planeHeader = NULL;
+		UINT16 acZeroesBytes;
+		UINT16 acValuesBytes;
+		switch (i)
+		{
+		case 0:
+			planeHeader = &(fileHeaderWithTables.YPlaneHeader);
+			acZeroesBytes = fileHeaderWithTables.FileHeader.YACZeroesBytes;
+			acValuesBytes = fileHeaderWithTables.FileHeader.YACValuesBytes;
+			break;
+		case 1:
+			planeHeader = &(fileHeaderWithTables.UPlaneHeader);
+			acZeroesBytes = fileHeaderWithTables.FileHeader.UACZeroesBytes;
+			acValuesBytes = fileHeaderWithTables.FileHeader.UACValuesBytes;
+			break;
+		case 2:
+			planeHeader = &(fileHeaderWithTables.VPlaneHeader);
+			acZeroesBytes = fileHeaderWithTables.FileHeader.VACZeroesBytes;
+			acValuesBytes = fileHeaderWithTables.FileHeader.VACValuesBytes;
+			break;
+		}
+		LengthTable<INT8> dcLengths;
+		LengthTable<UINT8> acZeroesLengths;
+		LengthTable<INT8> acValuesLengths;
+		std::copy(
+			std::begin(planeHeader->DCLengths),
+			std::end(planeHeader->DCLengths),
+			dcLengths.begin());
+		std::copy(
+			std::begin(planeHeader->ACZeroesLengths),
+			std::end(planeHeader->ACZeroesLengths),
+			acZeroesLengths.begin());
+		std::copy(
+			std::begin(planeHeader->ACValuesLengths),
+			std::end(planeHeader->ACValuesLengths),
+			acValuesLengths.begin());
+		std::vector<INT8> dcDifferences =
+			huffmanDecode<INT8>(
+				dcLengths,
+				bitsReadFromFile,
+				numBlocks);
+		std::vector<bool> entropiedACZeroes(
+			bitsReadFromFile.begin(),
+			bitsReadFromFile.begin() + (acZeroesBytes * 8));
+		bitsReadFromFile.erase(
+			bitsReadFromFile.begin(),
+			bitsReadFromFile.begin() + (acZeroesBytes * 8));
+		std::vector<UINT8> acZeroes =
+			huffmanDecode<UINT8>(
+				acZeroesLengths,
+				entropiedACZeroes);
+		std::vector<bool> entropiedACValues(
+			bitsReadFromFile.begin(),
+			bitsReadFromFile.begin() + (acValuesBytes * 8));
+		bitsReadFromFile.erase(
+			bitsReadFromFile.begin(),
+			bitsReadFromFile.begin() + (acValuesBytes * 8));
+		std::vector<INT8> acValues =
+			huffmanDecode<INT8>(
+				acValuesLengths,
+				entropiedACValues);
+		codedDC[i] = dcDifferences;
+		std::vector<std::pair<UINT8, INT8>> runLengthCodedAC(acZeroes.size());
+		INT32 blocksCoded = 0;
+		for (INT32 j = 0; j < runLengthCodedAC.size(); j++) {
+			runLengthCodedAC[j] = { acZeroes[j], acValues[j] };
+			if (acValues[j] == 0) {
+				blocksCoded += 1;
+			}
+			if (blocksCoded == numBlocks) {
+				break;
+			}
+		}
+		codedAC[i] = runLengthCodedAC;
+	}
+	return std::pair<CodedDC, CodedAC>(codedDC, codedAC);
+}
+
+Codec::YUVPlanes<INT8> Codec::runLengthDifferenceDecoder(
+	const FileHeaderWithTables & fileHeaderWithTables,
+	const std::pair<CodedDC, CodedAC> & runLengthDifferenceCoded)
+{
+	UINT8 blocksWide = fileHeaderWithTables.FileHeader.BlocksWide;
+	UINT8 blocksHigh = fileHeaderWithTables.FileHeader.BlocksHigh;
+	INT32 imageWidth = blocksWide * 8;
+	INT32 imageHeight = blocksHigh * 8;
+	// DC differences
+	CodedDC dcDifferences = runLengthDifferenceCoded.first;
+	// Run-length coded AC
+	CodedAC runLengthCodes = runLengthDifferenceCoded.second;
+	// Create planes
+	YUVPlanes<INT8> quantized(imageWidth, imageHeight);
+	// For each channel
+	for (UINT8 channel = 0; channel < 3; channel++) {
+		// Previous block's DC component
+		INT8 dc = 0;
+		// For each block
+		for (INT32 i = 0; i < imageHeight; i += 8) {
+			INT32 blockY = i / 8;
+			for (INT32 j = 0; j < imageWidth; j += 8) {
+				INT32 blockX = j / 8;
+				// Create block
+				Block<INT8> block;
+				block.fill(std::array<INT8, 8>{});
+				// Decode the DC differences
+				dc += dcDifferences[channel][0];
+				dcDifferences[channel].erase(dcDifferences[channel].begin());
+				block[0][0] = dc;
+				// Decode the zig-zag traversed run-length codes
+				std::pair<UINT8, INT8> code;
+				for (auto it = Z.begin(); it != Z.end(); it++) {
+					code = runLengthCodes[channel][0];
+					runLengthCodes[channel].erase(runLengthCodes[channel].begin());
+					if (code.first == 0 && code.second == 0) {
+						break;
+					}
+					while (code.first > 0) {
+						it++;
+						code.first -= 1;
+					}
+					block[it->second][it->first] = code.second;
+				}
+				if (!(code.first == 0 && code.second == 0)) {
+					runLengthCodes[channel].erase(runLengthCodes[channel].begin());
+				}
+				quantized.planes[channel][blockY][blockX] = block;
+			}
+		}
+
+	}
+	return quantized;
+}
+
+Codec::YUVPlanes<INT16> Codec::dequantize(const YUVPlanes<INT8>& quantized)
+{
+	INT32 width = quantized.getWidth();
+	INT32 height = quantized.getHeight();
+	YUVPlanes<INT16> output(width, height);
+	for (INT32 i = 0; i < height; i += 8) {
+		INT32 blockY = i / 8;
+		for (INT32 j = 0; j < width; j += 8) {
+			INT32 blockX = j / 8;
+			output.planes[Y][blockY][blockX] = dequantizeOnBlock<INT8, INT16>(quantized.planes[Y][blockY][blockX]);
+			output.planes[U][blockY][blockX] = dequantizeOnBlock<INT8, INT16>(quantized.planes[U][blockY][blockX]);
+			output.planes[V][blockY][blockX] = dequantizeOnBlock<INT8, INT16>(quantized.planes[V][blockY][blockX]);
+		}
+	}
+	return output;
+}
+
+Codec::YUVPlanes<INT8> Codec::inverseDCT(const YUVPlanes<INT16>& dct)
+{
+	INT32 width = dct.getWidth();
+	INT32 height = dct.getHeight();
+	YUVPlanes<INT8> output(width, height);
+	for (INT32 i = 0; i < height; i += 8) {
+		INT32 blockY = i / 8;
+		for (INT32 j = 0; j < width; j += 8) {
+			INT32 blockX = j / 8;
+			output.planes[Y][blockY][blockX] = inverseDCTOnBlock<INT16, INT8>(dct.planes[Y][blockY][blockX]);
+			output.planes[U][blockY][blockX] = inverseDCTOnBlock<INT16, INT8>(dct.planes[U][blockY][blockX]);
+			output.planes[V][blockY][blockX] = inverseDCTOnBlock<INT16, INT8>(dct.planes[V][blockY][blockX]);
+		}
+	}
+	return output;
+}
+
+BitmapFile * Codec::YUVToBitmap(const YUVPlanes<INT8>& yuv)
+{
+	INT32 width = yuv.getWidth();
+	INT32 height = yuv.getHeight();
+	BitmapFile* bitmapFile = new BitmapFile(width, height);
+	for (INT32 i = 0; i < height; i++) {
+		INT32 blockY = i / 8;
+		INT32 offsetY = i % 8;
+		for (INT32 j = 0; j < width; j++) {
+			INT32 blockX = j / 8;
+			INT32 offsetX = j % 8;
+			INT32 scaledY = yuv.planes[Y][blockY][blockX][offsetY][offsetX];
+			INT32 scaledU = yuv.planes[U][blockY][blockX][offsetY][offsetX];
+			INT32 scaledV = yuv.planes[V][blockY][blockX][offsetY][offsetX];
+			YUV yuvOutput;
+			yuvOutput.Y = static_cast<DOUBLE>(scaledY + 128) / 255.0;
+			yuvOutput.U = static_cast<DOUBLE>(scaledU + 128) / 255.0;
+			yuvOutput.V = static_cast<DOUBLE>(scaledV + 128) / 255.0;
+			NormalizedRGB rgbOutput = YUVtoNormalizedRGB(yuvOutput);
+			BitmapFile::Pixel pixelOutput = NormalizedRGBtoPixel(rgbOutput);
+			bitmapFile->setPixel(j, i, pixelOutput);
+		}
+	}
+	return bitmapFile;
+}
+
 IM3File* Codec::compress(BitmapFile * bitmapFile)
 {
 	Codec::YUVPlanes<INT8> yuv = bitmapToYUV(bitmapFile);
 	Codec::YUVPlanes<INT16> dctCoefficients = dct(yuv);
 	Codec::YUVPlanes<INT8> quantized = quantize(dctCoefficients);
-	std::pair<CodedDC, CodedAC> runLengthDifferenceCoded = runLengthDifferenceCoder(quantized);
+	std::pair<CodedDC, CodedAC> runLengthDifferenceCoded =
+		runLengthDifferenceCoder(quantized);
 	std::array<std::pair<EntropiedDC, EntropiedAC>, 3> entropyCoded = entropyCoder(
 		runLengthDifferenceCoded.first, runLengthDifferenceCoded.second);
 	UINT8 blocksWide = yuv.getWidth() / 8;
@@ -188,8 +387,18 @@ IM3File* Codec::compress(BitmapFile * bitmapFile)
 
 BitmapFile * Codec::decompress(IM3File* im3File)
 {
-	// TODO: Implement
-	return nullptr;
+	FileHeaderWithTables fileHeaderWithTables =
+		im3File->getFileHeaderWithTables();
+	std::vector<bool> bitsReadFromFile =
+		im3File->getBitsReadFromFile();
+	std::pair<CodedDC, CodedAC> runLengthDifferenceCoded =
+		entropyDecoder(fileHeaderWithTables, bitsReadFromFile);
+	YUVPlanes<INT8> quantized = runLengthDifferenceDecoder(
+		fileHeaderWithTables,
+		runLengthDifferenceCoded);
+	YUVPlanes<INT16> dct = dequantize(quantized);
+	YUVPlanes<INT8> yuv = inverseDCT(dct);
+	return YUVToBitmap(yuv);
 }
 
 Codec::Codec()

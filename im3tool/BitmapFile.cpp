@@ -117,6 +117,13 @@ BitmapFile::BitmapFile(HANDLE fileHandle, CreateResult* result) {
   *result = ReadBitmapFile(fileHandle);
 }
 
+BitmapFile::BitmapFile(INT32 width, INT32 height)
+{
+	File.Header.Width = width;
+	File.Header.Height = height;
+	File.Pixels = new Pixel[width * height];
+}
+
 BitmapFile::BitmapFile(const BitmapFile & bitmapFile) {
   File = bitmapFile.File;
   // Find how many bytes are in the image pixel data
